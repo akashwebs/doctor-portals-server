@@ -20,7 +20,6 @@ async function run() {
           const query={}
           const cursor=serviceCollection.find(query)
           const result=await cursor.toArray()
-          console.log(result);
           res.send(result);
         })
     }

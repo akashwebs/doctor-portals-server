@@ -37,10 +37,23 @@ async function run() {
         const serviceCollection = client.db('doctor_portal').collection('services')
         const bookingCollection = client.db('doctor_portal').collection('booking')
         const userCollection = client.db('doctor_portal').collection('user')
+        const doctorCollection = client.db('doctor_portal').collection('doctor')
+        // verify admin 
+        const verifyAdmin = async (req, res, next) => {
+            const decodedEmail = req.decoded.email;
+            const requisterRole = await userCollection.findOne({ email: decodedEmail });
+            if (requisterRole.role === 'admin') {
+                next()
+            } else {
+                res.status(403).send({ message: 'forbidden' })
+            }
+
+        }
+
         // get all appoinment services data
         app.get('/services', async (req, res) => {
             const query = {}
-            const cursor = serviceCollection.find(query).project({name:1})
+            const cursor = serviceCollection.find(query).project({ name: 1 })
             const result = await cursor.toArray()
             res.send(result);
         })
@@ -69,7 +82,13 @@ async function run() {
             const result = await bookingCollection.insertOne(booking)
             res.send({ success: true, result });
         })
+        // add doctor info in database from , add doctor
+        app.post('/doctor', verifyJwt, verifyAdmin, async (req, res) => {
+            const doctor = req.body;
+            const result = await doctorCollection.insertOne(doctor);
+            res.send(result)
 
+        })
         // get user 
         app.get('/users', verifyJwt, async (req, res) => {
             const result = await userCollection.find().toArray()
@@ -83,24 +102,29 @@ async function run() {
             res.send({ admin: isAdmin })
         })
 
-
+        // get doctor data
+        app.get('/doctor',verifyJwt,verifyAdmin,async(req,res)=>{
+            const doctors=await doctorCollection.find().toArray();
+            res.send(doctors)
+                    
+        })
+        app.delete('/doctor/:email',verifyJwt,verifyAdmin,async(req,res)=>{
+            const email=req.params.email;
+            const filter=({email: email})
+            const result=await doctorCollection.deleteOne(filter)
+            res.send(result)
+                    
+        })
         // make admin
 
         app.put('/user/admin/:email', verifyJwt, async (req, res) => {
             const email = req.params.email;
-            const requerstr = req.decoded.email;
-            const requestAccoutn = await userCollection.findOne({ email: requerstr });
-            if (requestAccoutn.role === 'admin') {
-
-                const filter = { email: email }
-                const updateDoc = {
-                    $set: { role: 'admin' }
-                };
-                const result = await userCollection.updateOne(filter, updateDoc)
-                res.send({ result });
-            } else {
-                res.status(403).send({ message: 'forbidden' })
-            }
+            const filter = { email: email };
+            const updateDoc = {
+                $set: { role: 'admin' }
+            };
+            const result = await userCollection.updateOne(filter, updateDoc);
+            res.send({ result });
         })
 
         // put user in database
@@ -116,12 +140,12 @@ async function run() {
             const result = await userCollection.updateOne(filter, updateDoc, option)
             res.send({ result, token });
         })
-        
+
 
         // get all  available services
         app.get('/available', async (req, res) => {
             // step1: get all booking
-            const date = req.query.date || 'May 18, 2022';
+            const date = req.query.date;
             const services = await serviceCollection.find().toArray()
             // step2: get the booking of the day
             const query = { date: date }
